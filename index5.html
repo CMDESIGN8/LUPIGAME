@@ -521,6 +521,7 @@ function initScene() {
   // Crear cámara
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 1.6, 3.2);
+  camera.lookAt(0, 0, 0);
 
   // Crear renderer
   renderer = new THREE.WebGLRenderer({ 
@@ -574,7 +575,7 @@ function initScene() {
 // Configurar iluminación mejorada
 function setupLighting() {
   // Luz ambiental
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
   
   // Luz direccional principal
@@ -604,37 +605,60 @@ function setupLighting() {
 
 // Crear terreno con textura de pasto
 function createTerrain() {
-  // Geometría grande y subdividida
-  const terrainGeometry = new THREE.PlaneGeometry(200, 200, 200, 200);
+    // Geometría grande para el terreno
+    const terrainGeometry = new THREE.PlaneGeometry(200, 200, 200, 200);
 
-  // Colinas suaves
-  const vertices = terrainGeometry.attributes.position.array;
-  for (let i = 0; i < vertices.length; i += 3) {
-    const x = vertices[i], z = vertices[i + 2];
-    vertices[i + 1] = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 3;
-  }
-  terrainGeometry.computeVertexNormals();
+    // Crear colinas suaves
+    const vertices = terrainGeometry.attributes.position.array;
+    for (let i = 0; i < vertices.length; i += 3) {
+        const x = vertices[i];
+        const z = vertices[i + 2];
+        vertices[i + 1] = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 3;
+    }
+    terrainGeometry.computeVertexNormals();
 
-  // Cargar textura de pasto
-  const loader = new THREE.TextureLoader();
-  const grassTexture = loader.load("textures/grass.jpg"); // asegúrate de que exista esta ruta
-  grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
-  grassTexture.repeat.set(30, 30);
+    // Cargar texturas
+    const loader = new THREE.TextureLoader();
+loader.load('textures/grass.jpg', (texture) => {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(30, 30);
+    texture.encoding = THREE.sRGBEncoding;
 
-  // Material sencillo (Lambert para que se vea fácil)
-  const terrainMaterial = new THREE.MeshLambertMaterial({
-    map: grassTexture,
-    side: THREE.DoubleSide
-  });
+    const material = new THREE.MeshStandardMaterial({ map: texture });
+    const geometry = new THREE.PlaneGeometry(200, 200, 200, 200);
+    const terrain = new THREE.Mesh(geometry, material);
+    terrain.rotation.x = -Math.PI / 2;
+    terrain.position.y = 0;
+    scene.add(terrain);
+});
 
-  // Crear mesh
-  const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
-  terrain.rotation.x = -Math.PI / 2;
-  terrain.position.y = -0.5; // bajar un poco para que no tape a Lupi
-  terrain.receiveShadow = true;
+    // Pasto
+    const grassTexture = loader.load("textures/grass.jpg", (texture) => {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(30, 30);
+        texture.encoding = THREE.sRGBEncoding;
+    });
 
-  // Agregar a la escena
-  scene.add(terrain);
+    // Opcional: normal map para relieve
+    const normalTexture = loader.load("textures/grass_normal.jpg", (texture) => {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    });
+
+    // Material con textura y normal map
+    const terrainMaterial = new THREE.MeshStandardMaterial({
+        map: grassTexture,
+        normalMap: normalTexture,
+        side: THREE.DoubleSide
+    });
+
+    // Crear mesh del terreno
+    const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+    terrain.rotation.x = -Math.PI / 2; // horizontal
+    terrain.position.y = -0.5;
+    terrain.receiveShadow = true;
+
+    // Agregar a la escena
+    scene.add(terrain);
 }
 
 
@@ -975,8 +999,8 @@ function setupControls() {
       const angle = Math.atan2(deltaY, deltaX);
       
       // CORRECCIÓN: Movimiento no invertido
-      joystickDir.x = (distance / 50) * Math.cos(angle);
-      joystickDir.y = (distance / 50) * Math.sin(angle);
+      joystickDir.x = -(distance / 50) * Math.cos(angle);
+      joystickDir.y = -(distance / 50) * Math.sin(angle);
       
       joystickKnob.style.transform = `translate(${deltaX * 0.7}px, ${deltaY * 0.7}px)`;
     });
@@ -1371,7 +1395,6 @@ function checkLevelUp() {
   }
 }
 
-// Actualizar HUD
 function updateHUD() {
   document.getElementById('level').textContent = gameState.level;
   document.getElementById('lupicoins').textContent = gameState.lupicoins;
@@ -1379,29 +1402,33 @@ function updateHUD() {
   document.getElementById('xpNeeded').textContent = gameState.xpNeeded;
   
   const xpPercent = (gameState.xp / gameState.xpNeeded) * 100;
-  document.getElementById('xpProgress').style.width = `${xpPercent}%`;
+  const xpBar = document.getElementById('xpProgress');
+  if (xpBar) xpBar.style.width = `${xpPercent}%`;
   
   const powerPercent = (gameState.power / gameState.maxPower) * 100;
-  document.getElementById('powerProgress').style.width = `${powerPercent}%`;
-  
-  // Mostrar combo si es mayor a 1
-  if (gameState.combo > 0) {
-    document.getElementById('powerIndicator').innerHTML = `
-      <div style="color: #fff; font-size: 0.9rem;">COMBO x${gameState.comboMultiplier}</div>
-      <div class="power-bar">
-        <div class="power-progress" style="background: linear-gradient(90deg, #ff00ff, #00ffff); width: 100%"></div>
-      </div>
-    `;
-  } else {
-    document.getElementById('powerIndicator').innerHTML = `
-      <div style="color: #fff; font-size: 0.9rem;">PODER</div>
-      <div class="power-bar">
-        <div class="power-progress" id="powerProgress"></div>
-      </div>
-    `;
-    document.getElementById('powerProgress').style.width = `${powerPercent}%`;
+
+  const powerIndicator = document.getElementById('powerIndicator');
+  if (powerIndicator) {
+    if (gameState.combo > 0) {
+      powerIndicator.innerHTML = `
+        <div style="color: #fff; font-size: 0.9rem;">COMBO x${gameState.comboMultiplier}</div>
+        <div class="power-bar">
+          <div class="power-progress" style="background: linear-gradient(90deg, #ff00ff, #00ffff); width: 100%"></div>
+        </div>
+      `;
+    } else {
+      powerIndicator.innerHTML = `
+        <div style="color: #fff; font-size: 0.9rem;">PODER</div>
+        <div class="power-bar">
+          <div class="power-progress" id="powerProgress"></div>
+        </div>
+      `;
+      const powerBar = document.getElementById('powerProgress');
+      if (powerBar) powerBar.style.width = `${powerPercent}%`;
+    }
   }
 }
+
 
 // Actualizar UI de misión
 function updateMissionUI() {
